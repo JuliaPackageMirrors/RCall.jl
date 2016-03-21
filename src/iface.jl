@@ -1,3 +1,4 @@
+import Base.sigatomic_begin, Base.sigatomic_end
 """
 Evaluate an R symbol or language object (i.e. a function call) in an R
 try/catch block, returning a Sxp pointer.
@@ -6,8 +7,13 @@ function reval_p{S<:Sxp}(expr::Ptr{S}, env::Ptr{EnvSxp})
     err = Array(Cint,1)
     protect(expr)
     protect(env)
-    val = ccall((:R_tryEval,libR),UnknownSxpPtr,(Ptr{S},Ptr{EnvSxp},Ptr{Cint}),expr,env,err)
-    unprotect(2)
+    sigatomic_begin()
+    try
+        val = ccall((:R_tryEval,libR),UnknownSxpPtr,(Ptr{S},Ptr{EnvSxp},Ptr{Cint}),expr,env,err)
+    finally
+        unprotect(2)
+        sigatomic_end()
+    end
     if err[1] !=0
         error("RCall.jl ", readall(RCall.errorBuffer))
     elseif nb_available(errorBuffer) != 0
